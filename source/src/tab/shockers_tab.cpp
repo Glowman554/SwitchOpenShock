@@ -1,12 +1,7 @@
 #include "tab/shockers_tab.hpp"
+#include "dialog.hpp"
 
 using namespace brls::literals;  // for _i18n
-
-void showFailDialog(std::string message) {
-    auto dialog = new brls::Dialog(message);
-    dialog->addButton("OK", []() {});
-    dialog->open();
-}
 
 
 ShockersTab::ShockersTab() {
@@ -25,12 +20,12 @@ ShockersTab::ShockersTab() {
 
     intensity->init("Intensity", 0, [this](float value){
         intensityValue = (int) (100. * value);
-        intensity->setDetailText(fmt::format("{}", intensityValue));
+        intensity->setDetailText(fmt::format("{}%", intensityValue));
     });
 
     duration->init("Duration", 0, [this](float value){
         durationValue = (int) (30. * value);
-        duration->setDetailText(fmt::format("{}", durationValue));
+        duration->setDetailText(fmt::format("{}s", durationValue));
     });
 
     send->registerClickAction([this](...){

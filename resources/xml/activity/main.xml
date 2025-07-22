@@ -34,6 +34,10 @@
             <ShockersTab />
         </brls:Tab>
 
+        <brls:Tab label="Right or wrong">
+            <RightOrWrongTab />
+        </brls:Tab>
+
         <brls:Tab label="Settings">
             <SettingsTab />
         </brls:Tab>

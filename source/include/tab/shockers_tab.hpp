@@ -20,7 +20,7 @@ public:
     BRLS_BIND(brls::SelectorCell, command, "command");
     BRLS_BIND(brls::SliderCell, intensity, "intensity");
     BRLS_BIND(brls::SliderCell, duration, "duration");
-    BRLS_BIND(brls::DetailCell, send, "send");
+    BRLS_BIND(brls::Button, send, "send");
 
     static brls::View* create();
 };
