@@ -1,6 +1,18 @@
 #include <openshock.hpp>
 
+#include <borealis.hpp>
 #include <format>
+
+#ifdef PLATFORM_DESKTOP
+#define CONFIG_FILE "openshock.txt"
+#endif
+
+#ifdef PLATFORM_SWITCH
+#define CONFIG_FILE "/config/openshock.txt"
+#endif
+
+
+#define TOKEN_LENGTH 64
 
 struct curl_slist* OpenShock::curl_headers() {
     struct curl_slist* headers = NULL;
@@ -31,7 +43,7 @@ CURL* OpenShock::curl_prepare(const char* url, struct curl_slist* headers, struc
 bool OpenShock::process_shockers(struct json_object* response) {
     struct json_object* data_array;
     if (!json_object_object_get_ex(response, "data", &data_array)) {
-        logs.push_back("Missing 'data' array");
+        brls::Logger::error("Missing 'data' array");
         return false;
     }
 
@@ -41,7 +53,7 @@ bool OpenShock::process_shockers(struct json_object* response) {
 
         struct json_object *shockers_array;
         if (!json_object_object_get_ex(dataNode, "shockers", &shockers_array)) {
-            logs.push_back("Missing 'shockers' array in data node");
+            brls::Logger::error("Missing 'shockers' array in data node");
             return false;
         }
 
@@ -90,9 +102,49 @@ struct json_object* OpenShock::build_commands(int intensity, int duration_second
     return root;
 }
 
-OpenShock::OpenShock(std::string token) {
+void OpenShock::set_token_header(std::string token) {
+    this->token = token;
     sprintf(token_header, "Open-Shock-Token: %s", token.c_str());
 }
+
+OpenShock::OpenShock() {
+    FILE* config_file = fopen(CONFIG_FILE, "r");
+    if (!config_file) {
+        brls::Logger::error("Failed to open {}", CONFIG_FILE);
+        set_token_header("-");
+        return;
+    }
+
+    fseek(config_file, 0, SEEK_END);
+    int len = ftell(config_file);
+    fseek(config_file, 0, SEEK_SET);
+
+    if (len < TOKEN_LENGTH) {
+        brls::Logger::error("Token too short {}", len);
+        fclose(config_file);
+        set_token_header("-");
+        return;
+    }
+
+    char token[TOKEN_LENGTH + 1] = { 0 };
+    fread(token, TOKEN_LENGTH, 1, config_file);
+    fclose(config_file);
+    
+    set_token_header(token);
+}
+
+void OpenShock::set_token(std::string token) {
+    FILE* config_file = fopen(CONFIG_FILE, "w");
+    fwrite(token.c_str(), token.size(), 1, config_file);
+    fclose(config_file);
+
+    set_token_header("-");
+}
+
+std::string OpenShock::get_token() {
+    return token;
+}
+
 
 bool OpenShock::request_shockers() {
     bool result = false;
@@ -105,19 +157,19 @@ bool OpenShock::request_shockers() {
     CURLcode res = curl_easy_perform(curl);
 
     if (res != CURLE_OK) {
-        logs.push_back(std::format("curl_easy_perform() failed: {}", curl_easy_strerror(res)));
+        brls::Logger::error("curl_easy_perform() failed: {}", curl_easy_strerror(res));
     } else {
-        logs.push_back(std::format("Response: {}", response->ptr));
+        brls::Logger::debug("Response: {}", response->ptr);
 
         struct json_object* parsed_json = json_tokener_parse(response->ptr);
         bool success = process_shockers(parsed_json);
         if (!success) {
-            logs.push_back("openshock_process_shockers() failed");
+            brls::Logger::error("openshock_process_shockers() failed");
         } else {
-            logs.push_back(std::format("Loaded {} shockers", shockers.size()));
+            brls::Logger::info("Loaded {} shockers", shockers.size());
 
             for (struct shocker shocker : shockers) {
-                logs.push_back(std::format("Shocker: '{}' '{}'", shocker.name.c_str(), shocker.id.c_str()));
+                brls::Logger::info("Shocker: '{}' '{}'", shocker.name.c_str(), shocker.id.c_str());
             }
 
             result = true;
@@ -148,9 +200,10 @@ bool OpenShock::send_command(int intensity, int duration_seconds, const char* co
     CURLcode res = curl_easy_perform(curl);
 
     if (res != CURLE_OK) {
-        logs.push_back(std::format("curl_easy_perform() failed: {}", curl_easy_strerror(res)));
+        brls::Logger::error("curl_easy_perform() failed: {}", curl_easy_strerror(res));
     } else {
-        logs.push_back(std::format("Response: {}", response->ptr));
+        brls::Logger::debug("Response: {}", response->ptr);
+        result = true;
     }
 
     json_object_put(root_json);
@@ -163,8 +216,4 @@ bool OpenShock::send_command(int intensity, int duration_seconds, const char* co
 
 std::vector<struct shocker> OpenShock::get_shockers() {
     return shockers;
-}
-
-std::vector<std::string> OpenShock::get_logs() {
-    return logs;
 }
