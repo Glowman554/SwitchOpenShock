@@ -4,9 +4,6 @@
 #include <openshock.hpp>
 
 class SettingsTab : public brls::Box {
-private:
-    OpenShock openshock;
-    
 public:
     SettingsTab();
 

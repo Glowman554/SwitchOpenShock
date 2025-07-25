@@ -105,14 +105,19 @@ struct json_object* OpenShock::build_commands(int intensity, int duration_second
 void OpenShock::set_token_header(std::string token) {
     this->token = token;
     sprintf(token_header, "Open-Shock-Token: %s", token.c_str());
+
+    shockers.clear();
 }
 
 OpenShock::OpenShock() {
+}
+
+bool OpenShock::load_token() {
     FILE* config_file = fopen(CONFIG_FILE, "r");
     if (!config_file) {
         brls::Logger::error("Failed to open {}", CONFIG_FILE);
-        set_token_header("-");
-        return;
+        set_token_header("");
+        return false;
     }
 
     fseek(config_file, 0, SEEK_END);
@@ -122,8 +127,8 @@ OpenShock::OpenShock() {
     if (len < TOKEN_LENGTH) {
         brls::Logger::error("Token too short {}", len);
         fclose(config_file);
-        set_token_header("-");
-        return;
+        set_token_header("");
+        return false;
     }
 
     char token[TOKEN_LENGTH + 1] = { 0 };
@@ -131,6 +136,8 @@ OpenShock::OpenShock() {
     fclose(config_file);
     
     set_token_header(token);
+
+    return true;
 }
 
 void OpenShock::set_token(std::string token) {
@@ -138,7 +145,7 @@ void OpenShock::set_token(std::string token) {
     fwrite(token.c_str(), token.size(), 1, config_file);
     fclose(config_file);
 
-    set_token_header("-");
+    set_token_header(token);
 }
 
 std::string OpenShock::get_token() {
@@ -147,6 +154,14 @@ std::string OpenShock::get_token() {
 
 
 bool OpenShock::request_shockers() {
+    if (token.empty() && !load_token()) {
+        return false;
+    }
+
+    if (shockers.size() > 0) {
+        return true;
+    }
+
     bool result = false;
 
     struct curl_slist* headers = curl_headers();
@@ -185,6 +200,10 @@ bool OpenShock::request_shockers() {
 }
 
 bool OpenShock::send_command(int intensity, int duration_seconds, const char* command) {
+    if (!load_token()) {
+        return false;
+    }
+
     bool result = false;
 
     struct curl_slist* headers = curl_headers();
@@ -217,3 +236,6 @@ bool OpenShock::send_command(int intensity, int duration_seconds, const char* co
 std::vector<struct shocker> OpenShock::get_shockers() {
     return shockers;
 }
+
+
+OpenShock openshock{};

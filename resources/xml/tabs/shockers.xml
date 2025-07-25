@@ -26,6 +26,8 @@
             <brls:SliderCell id="intensity"/>
             <brls:SliderCell id="duration"/>
 
+            <brls:BooleanCell id="warning"/>
+
             <brls:Button text="Send command" id="send" style="highlight" margin="30px"/>
 
         </brls:Box>

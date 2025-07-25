@@ -5,8 +5,6 @@
 
 class RightOrWrongTab : public brls::Box {
 private:
-    OpenShock openshock;
-
     int shockDuration;
     int shockIntensity;
     

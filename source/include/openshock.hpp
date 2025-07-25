@@ -31,6 +31,8 @@ private:
 public:
     OpenShock();
 
+    bool load_token();
+
     void set_token(std::string token);
     std::string get_token();
 
@@ -39,3 +41,5 @@ public:
 
     std::vector<struct shocker> get_shockers();
 };
+
+extern OpenShock openshock;
