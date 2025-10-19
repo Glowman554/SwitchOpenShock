@@ -1,5 +1,6 @@
 #include "tab/shockers_tab.hpp"
 #include "dialog.hpp"
+#include "utils.hpp"
 #include <algorithm> 
 
 using namespace brls::literals;  // for _i18n
@@ -7,19 +8,9 @@ using namespace brls::literals;  // for _i18n
 #define VIBRATE_DURATION 1
 #define VIBRATE_INTENSITY 25
 
-int findIndex(std::vector<std::string>& array, std::string goal) {
-    for (int i = 0; i < array.size(); i++) {
-        if (array[i] == goal) {
-            return i;
-        }
-    }
-
-    return -1;
-}
-
 
 void ShockersTab::sendVibrate() {
-    bool success = openshock.send_command(VIBRATE_INTENSITY, VIBRATE_DURATION, "Vibrate");
+    bool success = openshock.send_command(VIBRATE_INTENSITY, VIBRATE_DURATION, "Vibrate", openshock.shockers);
     if (!success) {
         showFailDialog("Failed to send command");
     }
@@ -27,7 +18,7 @@ void ShockersTab::sendVibrate() {
 
 
 void ShockersTab::sendCommand() {
-    bool success = openshock.send_command(intensityValue, durationValue, commandValue.c_str());
+    bool success = openshock.send_command(intensityValue, durationValue, commandValue.c_str(), openshock.shockers);
     if (!success) {
         showFailDialog("Failed to send command");
     }
@@ -37,12 +28,12 @@ void ShockersTab::sendCommand() {
 ShockersTab::ShockersTab() {
     this->inflateFromXMLRes("xml/tabs/shockers.xml");
 
-    bool success = openshock.request_shockers();
+    bool success = openshock.request_own_shockers();
     if (!success) {
         showFailDialog("Failed to load shockers");
     }
 
-    shockers->setDetailText(fmt::format("Loaded {} shockers", openshock.get_shockers().size()));
+    shockers->setDetailText(fmt::format("Loaded {} shockers", openshock.shockers.size()));
     updateSliderText();
 
     command->init("Command", commands, findIndex(commands, commandValue), [](int selected) {}, [this](int selected) {

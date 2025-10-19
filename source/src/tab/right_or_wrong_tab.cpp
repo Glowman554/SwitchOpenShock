@@ -7,14 +7,14 @@ using namespace brls::literals;  // for _i18n
 #define VIBRATE_INTENSITY 25
 
 void RightOrWrongTab::sendVibrate() {
-    bool success = openshock.send_command(VIBRATE_INTENSITY, VIBRATE_DURATION, "Vibrate");
+    bool success = openshock.send_command(VIBRATE_INTENSITY, VIBRATE_DURATION, "Vibrate", openshock.shockers);
     if (!success) {
         showFailDialog("Failed to send command");
     }
 }
 
 void RightOrWrongTab::sendShock() {
-    bool success = openshock.send_command(shockIntensity, shockDuration, "Shock");
+    bool success = openshock.send_command(shockIntensity, shockDuration, "Shock", openshock.shockers);
     if (!success) {
         showFailDialog("Failed to send command");
     }
@@ -46,14 +46,14 @@ void RightOrWrongTab::setProfile(int index) {
 RightOrWrongTab::RightOrWrongTab() {
     this->inflateFromXMLRes("xml/tabs/right_or_wrong.xml");
 
-    bool success = openshock.request_shockers();
+    bool success = openshock.request_own_shockers();
     if (!success) {
         showFailDialog("Failed to load shockers");
     }
 
     setProfile(0);
 
-    shockers->setDetailText(fmt::format("Loaded {} shockers", openshock.get_shockers().size()));
+    shockers->setDetailText(fmt::format("Loaded {} shockers", openshock.shockers.size()));
 
     profile->init("Profile", { "Calm", "Balanced", "Aggressive", "Death" }, 0, [](int selected) {}, [this](int selected) {
         setProfile(selected);

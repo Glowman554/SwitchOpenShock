@@ -4,6 +4,7 @@
 
 #include "tab/settings_tab.hpp"
 #include "tab/shockers_tab.hpp"
+#include "tab/shared_tab.hpp"
 #include "tab/right_or_wrong_tab.hpp"
 #include "activity/main_activity.hpp"
 
@@ -34,6 +35,7 @@ int main(int argc, char* argv[]) {
 
     brls::Application::registerXMLView("SettingsTab", SettingsTab::create);
     brls::Application::registerXMLView("ShockersTab", ShockersTab::create);
+    brls::Application::registerXMLView("SharedTab", SharedTab::create);
     brls::Application::registerXMLView("RightOrWrongTab", RightOrWrongTab::create);
 
     brls::getStyle().addMetric("about/padding_top_bottom", 50);

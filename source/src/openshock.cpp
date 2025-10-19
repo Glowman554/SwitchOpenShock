@@ -40,12 +40,14 @@ CURL* OpenShock::curl_prepare(const char* url, struct curl_slist* headers, struc
     return curl;
 }
 
-bool OpenShock::process_shockers(struct json_object* response) {
+std::vector<struct shocker> OpenShock::process_shockers(struct json_object* response) {
     struct json_object* data_array;
     if (!json_object_object_get_ex(response, "data", &data_array)) {
         brls::Logger::error("Missing 'data' array");
-        return false;
+        return {};
     }
+
+    std::vector<struct shocker> result{};
 
     size_t data_len = json_object_array_length(data_array);
     for (size_t i = 0; i < data_len; ++i) {
@@ -54,12 +56,10 @@ bool OpenShock::process_shockers(struct json_object* response) {
         struct json_object *shockers_array;
         if (!json_object_object_get_ex(dataNode, "shockers", &shockers_array)) {
             brls::Logger::error("Missing 'shockers' array in data node");
-            return false;
+            return {};
         }
 
         size_t len = json_object_array_length(shockers_array);
-
-        shockers.clear();
         for (size_t j = 0; j < len; ++j) {
             struct json_object* shockerNode = json_object_array_get_idx(shockers_array, j);
 
@@ -69,7 +69,7 @@ bool OpenShock::process_shockers(struct json_object* response) {
             if (json_object_object_get_ex(shockerNode, "name", &name_obj) &&
                 json_object_object_get_ex(shockerNode, "id", &id_obj)) {
                     
-                shockers.push_back({
+                result.push_back({
                     .name = json_object_get_string(name_obj),
                     .id = json_object_get_string(id_obj)
                 });
@@ -77,14 +77,75 @@ bool OpenShock::process_shockers(struct json_object* response) {
         }
     }
 
-    return true;
+    return result;
 }
 
-struct json_object* OpenShock::build_commands(int intensity, int duration_seconds, const char* command) {
+std::vector<struct shared_shockers> OpenShock::process_shared(struct json_object* response) {
+    struct json_object* data_array;
+    if (!json_object_object_get_ex(response, "data", &data_array)) {
+        brls::Logger::error("Missing 'data' array");
+        return {};
+    }
+
+    std::vector<struct shared_shockers> result{};
+
+    size_t data_len = json_object_array_length(data_array);
+    for (size_t i = 0; i < data_len; ++i) {
+        struct json_object *dataNode = json_object_array_get_idx(data_array, i);
+
+        struct json_object* devices_array;
+        if (!json_object_object_get_ex(dataNode, "devices", &devices_array)) {
+            brls::Logger::error("Missing 'devices' array in data node");
+            return {};
+        }
+
+        size_t devices_len = json_object_array_length(devices_array);
+        for (size_t j = 0; j < devices_len; ++j) {
+            struct json_object* deviceNode = json_object_array_get_idx(devices_array, j);
+
+            struct json_object* shockers_array;
+            if (!json_object_object_get_ex(deviceNode, "shockers", &shockers_array)) {
+                brls::Logger::error("Missing 'shockers' array in data node");
+                return {};
+            }
+
+            std::vector<struct shocker> s{};
+
+            size_t len = json_object_array_length(shockers_array);
+            for (size_t k = 0; k < len; ++k) {
+                struct json_object* shockerNode = json_object_array_get_idx(shockers_array,k);
+
+                struct json_object* name_obj;
+                struct json_object* id_obj;
+
+                if (json_object_object_get_ex(shockerNode, "name", &name_obj) &&
+                    json_object_object_get_ex(shockerNode, "id", &id_obj)) {
+                        
+                    s.push_back({
+                        .name = json_object_get_string(name_obj),
+                        .id = json_object_get_string(id_obj)
+                    });
+                }
+            }
+
+            struct json_object* name_obj;
+            if (json_object_object_get_ex(deviceNode, "name", &name_obj)) {
+                result.push_back({
+                    .name = json_object_get_string(name_obj),
+                    .shockers = s
+                });
+            }
+        }
+    }
+
+    return result;
+}
+
+struct json_object* OpenShock::build_commands(int intensity, int duration_seconds, const char* command, std::vector<struct shocker> active) {
     struct json_object *root = json_object_new_object();
     struct json_object *shocks_array = json_object_new_array();
 
-    for (struct shocker shocker : shockers) {
+    for (struct shocker shocker : active) {
         struct json_object *shock = json_object_new_object();
 
         json_object_object_add(shock, "id", json_object_new_string(shocker.id.c_str()));
@@ -153,7 +214,7 @@ std::string OpenShock::get_token() {
 }
 
 
-bool OpenShock::request_shockers() {
+bool OpenShock::request_own_shockers() {
     if (token.empty() && !load_token()) {
         return false;
     }
@@ -177,9 +238,9 @@ bool OpenShock::request_shockers() {
         brls::Logger::debug("Response: {}", response->ptr);
 
         struct json_object* parsed_json = json_tokener_parse(response->ptr);
-        bool success = process_shockers(parsed_json);
-        if (!success) {
-            brls::Logger::error("openshock_process_shockers() failed");
+        std::vector<struct shocker> s = process_shockers(parsed_json);
+        if (s.empty()) {
+            brls::Logger::error("process_shockers() failed");
         } else {
             brls::Logger::info("Loaded {} shockers", shockers.size());
 
@@ -187,6 +248,7 @@ bool OpenShock::request_shockers() {
                 brls::Logger::info("Shocker: '{}' '{}'", shocker.name.c_str(), shocker.id.c_str());
             }
 
+            shockers = s;
             result = true;
         }
         json_object_put(parsed_json);
@@ -199,7 +261,56 @@ bool OpenShock::request_shockers() {
     return result;
 }
 
-bool OpenShock::send_command(int intensity, int duration_seconds, const char* command) {
+bool OpenShock::request_shared_shockers() {
+    if (token.empty() && !load_token()) {
+        return false;
+    }
+
+    if (shared.size() > 0) {
+        return true;
+    }
+
+    bool result = false;
+
+    struct curl_slist* headers = curl_headers();
+    struct response_string* response = response_string_init();
+    CURL* curl = curl_prepare("https://api.openshock.app/1/shockers/shared", headers, response);
+
+
+    CURLcode res = curl_easy_perform(curl);
+
+    if (res != CURLE_OK) {
+        brls::Logger::error("curl_easy_perform() failed: {}", curl_easy_strerror(res));
+    } else {
+        brls::Logger::debug("Response: {}", response->ptr);
+
+        struct json_object* parsed_json = json_tokener_parse(response->ptr);
+        std::vector<struct shared_shockers> s = process_shared(parsed_json);
+        if (s.empty()) {
+            brls::Logger::error("process_shared() failed");
+        } else {
+            brls::Logger::info("Loaded {} shockers", shockers.size());
+
+            for (struct shared_shockers shared : s) {
+                for (struct shocker shocker : shared.shockers) {
+                    brls::Logger::info("[{}] Shocker: '{}' '{}'", shared.name.c_str(), shocker.name.c_str(), shocker.id.c_str());
+                }
+            }
+
+            shared = s;
+            result = true;
+        }
+        json_object_put(parsed_json);
+    }
+
+    curl_slist_free_all(headers);
+    response_string_cleanup(response);
+    curl_easy_cleanup(curl);
+
+    return result;
+}
+
+bool OpenShock::send_command(int intensity, int duration_seconds, const char* command, std::vector<struct shocker> active) {
     if (!load_token()) {
         return false;
     }
@@ -210,7 +321,7 @@ bool OpenShock::send_command(int intensity, int duration_seconds, const char* co
     struct response_string* response = response_string_init();
     CURL* curl = curl_prepare("https://api.openshock.app/2/shockers/control", headers, response);
 
-    json_object* root_json = build_commands(intensity, duration_seconds, command);
+    json_object* root_json = build_commands(intensity, duration_seconds, command, active);
 
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_object_to_json_string_ext(root_json, JSON_C_TO_STRING_PRETTY));
@@ -233,9 +344,6 @@ bool OpenShock::send_command(int intensity, int duration_seconds, const char* co
     return result;
 }
 
-std::vector<struct shocker> OpenShock::get_shockers() {
-    return shockers;
-}
 
 
 OpenShock openshock{};
